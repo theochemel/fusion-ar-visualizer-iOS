@@ -19,7 +19,13 @@ class ARViewController: UIViewController, ARSCNViewDelegate, WebSocketDelegate, 
 
     var latestSTLData: Data?
     
-    var currentMaterial: SCNMaterial = {
+    let controlViewController = ControlViewController()
+    
+    var model: SCNNode?
+    
+    var currentModelPosition: simd_float4x4?
+    
+    var currentModelMaterial: SCNMaterial = {
         let material = SCNMaterial()
         material.lightingModel = .physicallyBased
         material.diffuse.contents = UIColor.gray
@@ -28,17 +34,9 @@ class ARViewController: UIViewController, ARSCNViewDelegate, WebSocketDelegate, 
         return material
     }()
     
-    var currentModelPosition: simd_float4x4?
-    
-    var currentModelScale = SCNVector3(40, 40, 40)
-    
     var currentModelRotation: Float = 0.0
     
-    var isInPlaceMode = false
-    
-    let controlViewController = ControlViewController()
-    
-    var model: SCNNode?
+    var currentModelScale: Float = 10.0
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -59,8 +57,6 @@ class ARViewController: UIViewController, ARSCNViewDelegate, WebSocketDelegate, 
         let gestureRecognizer = UITapGestureRecognizer(target: self, action: #selector(didTap(_:)))
         view.addGestureRecognizer(gestureRecognizer)
         
-        isInPlaceMode = true
-        
         addChild(controlViewController)
         view.addSubview(controlViewController.view)
         
@@ -77,33 +73,31 @@ class ARViewController: UIViewController, ARSCNViewDelegate, WebSocketDelegate, 
     }
     
     @objc func didTap(_ recognizer: UITapGestureRecognizer) {
-        print("Tap")
         
-        if isInPlaceMode {
-            
-            guard let hitTestResult = sceneView.hitTest(recognizer.location(in: sceneView), types: [.estimatedHorizontalPlane, .existingPlaneUsingExtent]).first,
-                let planeAnchor = hitTestResult.anchor as? ARPlaneAnchor
-                else {
-                    // Place in front of camera
-                    return
-            }
-            
+        if let hitTestResult = sceneView.hitTest(CGPoint(x: view.bounds.midX, y: view.bounds.midY), types: [.estimatedHorizontalPlane, .existingPlaneUsingExtent]).first,
+            let planeAnchor = hitTestResult.anchor as? ARPlaneAnchor {
+        
+            guard let modelData = latestSTLData else { return }
             currentModelPosition = hitTestResult.worldTransform
-            updateModelIfNeeded()
-            
+            setModel(modelData: modelData, position: hitTestResult.worldTransform, material: currentModelMaterial, scale: currentModelScale, rotation: currentModelRotation)
+        } else {
+            guard let modelData = latestSTLData else { return }
+            guard let camera = sceneView.pointOfView else { return }
+            var translation = matrix_identity_float4x4
+            translation.columns.3.z = -0.5
+            currentModelPosition = matrix_multiply(camera.simdTransform, translation)
+            setModel(modelData: modelData, position: currentModelPosition!, material: currentModelMaterial, scale: currentModelScale, rotation: currentModelRotation)
         }
     }
     
     func websocketDidConnect(socket: WebSocketClient) {
         print("websocket is connected")
         controlViewController.setConnectionStatus(isConnected: true)
-        // Update UI
     }
     
     func websocketDidDisconnect(socket: WebSocketClient, error: Error?) {
         print("websocket is disconnected, retrying...")
         controlViewController.setConnectionStatus(isConnected: false)
-        // Update UI
         let timer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { (_) in
             socket.connect()
         }
@@ -117,68 +111,68 @@ class ARViewController: UIViewController, ARSCNViewDelegate, WebSocketDelegate, 
         print("websocket recieved data: \(data.count)")
         
         latestSTLData = data
+        guard let position = currentModelPosition else { return }
         
-        updateModelIfNeeded()
+        setModel(modelData: data, position: position, material: currentModelMaterial, scale: currentModelScale, rotation: currentModelRotation)
     }
     
-    func updateModelIfNeeded() {
-        guard let data = latestSTLData else { return }
-        guard let node = try? BinarySTLParser.createNodeFromSTL(withData: data, unit: .millimeter) else {
+    func setModel(modelData: Data, position: simd_float4x4, material: SCNMaterial, scale: Float, rotation: Float) {
+        guard let model = try? BinarySTLParser.createNodeFromSTL(withData: modelData, unit: .millimeter) else {
             print("Error parsing STL")
             return
         }
-        guard let position = currentModelPosition else { return }
         
         for child in sceneView.scene.rootNode.childNodes {
             child.removeFromParentNode()
         }
         
-        node.geometry?.materials = [currentMaterial]
+        model.geometry?.materials = [material]
         
+        model.simdWorldTransform = position
+        
+        
+        let (minVec, maxVec) = model.boundingBox
+        model.pivot = SCNMatrix4MakeTranslation((maxVec.x - minVec.x) / 2 + minVec.x, (maxVec.y - minVec.y) / 2 + minVec.y, 0)
+        
+        model.scale = SCNVector3(scale, scale, scale)
+        model.rotation = SCNVector4(0.0, rotation, 0.0, rotation)
+        
+        sceneView.scene.rootNode.addChildNode(model)
+        
+        self.model = model
+        
+        print("Set model")
+    }
+    
+    func updateModelPosition(position: simd_float4x4) {
+        currentModelPosition = position
+        guard let node = model else { return }
         node.simdWorldTransform = position
-        node.scale = currentModelScale
-        
-        model = node
-        
-        sceneView.scene.rootNode.addChildNode(node)
-        
-        print("Updated model")
     }
     
-    func updateModelScale() {
+    func updateModelScale(scale: Float) {
+        currentModelScale = scale
+        SCNTransaction.animationDuration = 0.1
+        model?.scale = SCNVector3(scale, scale, scale)
+    }
+    
+    func updateModelRotation(rotation: Float) {
+        currentModelRotation = rotation
+        
         guard let node = model else { return }
         
         SCNTransaction.animationDuration = 0.1
-        node.scale = currentModelScale
+        let (minVec, maxVec) = node.boundingBox
+        node.pivot = SCNMatrix4MakeTranslation((maxVec.x - minVec.x) / 2 + minVec.x, (maxVec.y - minVec.y) / 2 + minVec.y, 0)
+        node.rotation = SCNVector4(0.0, rotation, 0.0, rotation)
+
     }
     
-    func updateModelRotation() {
-        guard let node = model else { return }
-        
-        SCNTransaction.animationDuration = 0.1
-        node.rotation = SCNVector4(currentModelRotation, 0.0, 0.0, 0.0)
+    func shouldChangeModelScale(_ scale: Float) {
+        updateModelScale(scale: scale)
     }
     
-    func renderer(_ renderer: SCNSceneRenderer, didAdd node: SCNNode, for anchor: ARAnchor) {
-        print("New plane anchor: \(anchor.transform)")
+    func shouldChangeModelRotation(_ rotation: Float) {
+        updateModelRotation(rotation: rotation)
     }
-    
-    // MARK: Delegate methods for ARControlsDelegate
-    
-    func shouldChangeModelScale(_ value: Float) {
-        print("Change model scale: \(value)")
-        currentModelScale = SCNVector3(x: value, y: value, z: value)
-        updateModelScale()
-    }
-    
-    func shouldChangeModelLighting(_ value: Float) {
-        print("Change model lighting: \(value)")
-    }
-    
-    func shouldChangeModelRotation(_ value: Float) {
-        print("Change model rotation: \(value)")
-        currentModelRotation = value
-        updateModelRotation()
-    }
-    
 }

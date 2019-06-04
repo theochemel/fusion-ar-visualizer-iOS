@@ -23,7 +23,6 @@ class ControlViewController: UIViewController {
     
     var scaleExpandableButton = ExpandableControlButton(icon: UIImage(named: "scale"), sliderMin: 10.0, sliderMax: 80.0)
     var rotateExpandableButton = ExpandableControlButton(icon: UIImage(named: "rotate"), sliderMin: 0.0, sliderMax: Float.pi * 2)
-    var lightExpandableButton = ExpandableControlButton(icon: UIImage(named: "light"), sliderMin: 10.0, sliderMax: 1000.0)
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -103,16 +102,6 @@ class ControlViewController: UIViewController {
             rotateExpandableButton.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16.0),
             rotateExpandableButton.bottomAnchor.constraint(equalTo: scaleExpandableButton.topAnchor, constant: -16.0),
         ])
-        
-        view.addSubview(lightExpandableButton)
-        lightExpandableButton.slider.addTarget(self, action: #selector(didChangeLightSlider(_:)), for: .valueChanged)
-        
-        NSLayoutConstraint.activate([
-            lightExpandableButton.widthAnchor.constraint(equalToConstant: 300.0),
-            lightExpandableButton.heightAnchor.constraint(equalToConstant: 56.0),
-            lightExpandableButton.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16.0),
-            lightExpandableButton.bottomAnchor.constraint(equalTo: rotateExpandableButton.topAnchor, constant: -16.0)
-        ])
     }
     
     @objc func didChangeScaleSlider(_ sender: UISlider) {
@@ -121,10 +110,6 @@ class ControlViewController: UIViewController {
     
     @objc func didChangeRotateSlider(_ sender: UISlider) {
         delegate?.shouldChangeModelRotation(sender.value)
-    }
-    
-    @objc func didChangeLightSlider(_ sender: UISlider) {
-        delegate?.shouldChangeModelLighting(sender.value)
     }
     
     func setConnectionStatus(isConnected: Bool) {
@@ -138,5 +123,4 @@ class ControlViewController: UIViewController {
 protocol ARControlsDelegate: class {
     func shouldChangeModelScale(_ value: Float)
     func shouldChangeModelRotation(_ value: Float)
-    func shouldChangeModelLighting(_ value: Float)
 }
