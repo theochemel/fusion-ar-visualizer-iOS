@@ -1,0 +1,21 @@
+PODS:
+  - Starscream (3.1.0)
+
+DEPENDENCIES:
+  - Starscream (from `https://github.com/theochemel/Starscream.git`)
+
+EXTERNAL SOURCES:
+  Starscream:
+    :git: https://github.com/theochemel/Starscream.git
+
+CHECKOUT OPTIONS:
+  Starscream:
+    :commit: 9a671049abbed1b36c255b67f733eb2547f9933e
+    :git: https://github.com/theochemel/Starscream.git
+
+SPEC CHECKSUMS:
+  Starscream: 08172b481e145289c4930cb567230fb55897cfa4
+
+PODFILE CHECKSUM: e77679ea097afb6d6b4d64065fec8d2be2bd3c0c
+
+COCOAPODS: 1.5.3
