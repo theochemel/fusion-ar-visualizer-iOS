@@ -11,7 +11,7 @@ import SceneKit
 import ARKit
 import Starscream
 
-class ARViewController: UIViewController, ARSCNViewDelegate, WebSocketDelegate, ARControlsDelegate {
+class ARViewController: UIViewController, ARSCNViewDelegate, ARSessionDelegate, WebSocketDelegate, ARControlsDelegate {
 
     @IBOutlet var sceneView: ARSCNView!
     
@@ -23,14 +23,17 @@ class ARViewController: UIViewController, ARSCNViewDelegate, WebSocketDelegate, 
     
     var model: SCNNode?
     
+    var isInPlaceMode = false
+    
     var currentModelPosition: simd_float4x4?
+    
+    var placeLocationIndicator: SCNNode?
     
     var currentModelMaterial: SCNMaterial = {
         let material = SCNMaterial()
         material.lightingModel = .physicallyBased
         material.diffuse.contents = UIColor.gray
         material.metalness.contents = UIColor.gray
-        material.emission.contents = UIColor.black
         return material
     }()
     
@@ -54,7 +57,7 @@ class ARViewController: UIViewController, ARSCNViewDelegate, WebSocketDelegate, 
         
         sceneView.autoenablesDefaultLighting = true
         
-        let gestureRecognizer = UITapGestureRecognizer(target: self, action: #selector(didTap(_:)))
+        let gestureRecognizer = UILongPressGestureRecognizer(target: self, action: #selector(didLongPress(_:)))
         view.addGestureRecognizer(gestureRecognizer)
         
         addChild(controlViewController)
@@ -68,27 +71,83 @@ class ARViewController: UIViewController, ARSCNViewDelegate, WebSocketDelegate, 
         
         let configuration = ARWorldTrackingConfiguration()
         configuration.planeDetection = [.horizontal]
-        
+        sceneView.session.delegate = self
         sceneView.session.run(configuration)
     }
     
-    @objc func didTap(_ recognizer: UITapGestureRecognizer) {
-        
-        if let hitTestResult = sceneView.hitTest(CGPoint(x: view.bounds.midX, y: view.bounds.midY), types: [.estimatedHorizontalPlane, .existingPlaneUsingExtent]).first,
-            let planeAnchor = hitTestResult.anchor as? ARPlaneAnchor {
-        
-            guard let modelData = latestSTLData else { return }
-            currentModelPosition = hitTestResult.worldTransform
-            setModel(modelData: modelData, position: hitTestResult.worldTransform, material: currentModelMaterial, scale: currentModelScale, rotation: currentModelRotation)
-        } else {
-            guard let modelData = latestSTLData else { return }
-            guard let camera = sceneView.pointOfView else { return }
-            var translation = matrix_identity_float4x4
-            translation.columns.3.z = -0.5
-            currentModelPosition = matrix_multiply(camera.simdTransform, translation)
-            setModel(modelData: modelData, position: currentModelPosition!, material: currentModelMaterial, scale: currentModelScale, rotation: currentModelRotation)
+    @objc func didLongPress(_ recognizer: UILongPressGestureRecognizer) {
+        if recognizer.state == .began {
+            beginModelPlaceMode()
+            isInPlaceMode = true
+            
+        } else if recognizer.state == .ended {
+            endModelPlaceMode()
+            isInPlaceMode = false
         }
     }
+    
+    func session(_ session: ARSession, didUpdate frame: ARFrame) {
+        if isInPlaceMode,
+            let indicator = placeLocationIndicator {
+            
+            guard let hitTestResult = sceneView.hitTest(CGPoint(x: view.bounds.midX, y: view.bounds.midY), types: [.estimatedHorizontalPlane, .existingPlaneUsingExtent]).first,
+                let planeAnchor = hitTestResult.anchor as? ARPlaneAnchor else {
+                    indicator.position = SCNVector3(0.0, 0.0, -0.2)
+                    return
+            }
+            
+            indicator.position = SCNVector3(0.0, 0.0, -hitTestResult.distance)
+        }
+    }
+    
+    func beginModelPlaceMode() {
+        print("Starting place mode")
+        let sphere = SCNSphere(radius: 0.005)
+        sphere.firstMaterial = {
+            let material = SCNMaterial()
+            material.diffuse.contents = UIColor.orange
+            material.emission.contents = UIColor.orange
+            return material
+        }()
+        placeLocationIndicator?.removeFromParentNode()
+        placeLocationIndicator = SCNNode()
+        placeLocationIndicator!.geometry = sphere
+        placeLocationIndicator!.position = SCNVector3(0.0, 0.0, -0.2)
+        sceneView.pointOfView!.addChildNode(placeLocationIndicator!)
+    }
+    
+    func endModelPlaceMode() {
+        print("Ending place mode")
+
+        
+        if let modelData = latestSTLData, let indicator = placeLocationIndicator {
+            currentModelPosition = indicator.simdWorldTransform
+            setModel(modelData: modelData, position: currentModelPosition!, material: currentModelMaterial, scale: currentModelScale, rotation: currentModelRotation)
+        }
+        
+        placeLocationIndicator?.removeFromParentNode()
+        placeLocationIndicator = nil
+    }
+    
+    
+    
+//    @objc func didTap(_ recognizer: UITapGestureRecognizer) {
+//
+//        if let hitTestResult = sceneView.hitTest(CGPoint(x: view.bounds.midX, y: view.bounds.midY), types: [.estimatedHorizontalPlane, .existingPlaneUsingExtent]).first,
+//            let planeAnchor = hitTestResult.anchor as? ARPlaneAnchor {
+//
+//            guard let modelData = latestSTLData else { return }
+//            currentModelPosition = hitTestResult.worldTransform
+//            setModel(modelData: modelData, position: hitTestResult.worldTransform, material: currentModelMaterial, scale: currentModelScale, rotation: currentModelRotation)
+//        } else {
+//            guard let modelData = latestSTLData else { return }
+//            guard let camera = sceneView.pointOfView else { return }
+//            var translation = matrix_identity_float4x4
+//            translation.columns.3.z = -0.5
+//            currentModelPosition = matrix_multiply(camera.simdTransform, translation)
+//            setModel(modelData: modelData, position: currentModelPosition!, material: currentModelMaterial, scale: currentModelScale, rotation: currentModelRotation)
+//        }
+//    }
     
     func websocketDidConnect(socket: WebSocketClient) {
         print("websocket is connected")
@@ -117,29 +176,27 @@ class ARViewController: UIViewController, ARSCNViewDelegate, WebSocketDelegate, 
     }
     
     func setModel(modelData: Data, position: simd_float4x4, material: SCNMaterial, scale: Float, rotation: Float) {
-        guard let model = try? BinarySTLParser.createNodeFromSTL(withData: modelData, unit: .millimeter) else {
+        guard let node = try? BinarySTLParser.createNodeFromSTL(withData: modelData, unit: .millimeter) else {
             print("Error parsing STL")
             return
         }
         
-        for child in sceneView.scene.rootNode.childNodes {
-            child.removeFromParentNode()
-        }
+        self.model?.removeFromParentNode()
         
-        model.geometry?.materials = [material]
+        node.childNodes.first?.geometry?.firstMaterial = material
         
-        model.simdWorldTransform = position
+        node.simdWorldTransform = position
         
         
-        let (minVec, maxVec) = model.boundingBox
-        model.pivot = SCNMatrix4MakeTranslation((maxVec.x - minVec.x) / 2 + minVec.x, (maxVec.y - minVec.y) / 2 + minVec.y, 0)
+        let (minVec, maxVec) = node.boundingBox
+        node.pivot = SCNMatrix4MakeTranslation((maxVec.x - minVec.x) / 2 + minVec.x, (maxVec.y - minVec.y) / 2 + minVec.y, 0)
         
-        model.scale = SCNVector3(scale, scale, scale)
-        model.rotation = SCNVector4(0.0, rotation, 0.0, rotation)
+        node.scale = SCNVector3(scale, scale, scale)
+        node.rotation = SCNVector4(0.0, rotation, 0.0, rotation)
         
-        sceneView.scene.rootNode.addChildNode(model)
+        sceneView.scene.rootNode.addChildNode(node)
         
-        self.model = model
+        self.model = node
         
         print("Set model")
     }
@@ -174,5 +231,13 @@ class ARViewController: UIViewController, ARSCNViewDelegate, WebSocketDelegate, 
     
     func shouldChangeModelRotation(_ rotation: Float) {
         updateModelRotation(rotation: rotation)
+    }
+    
+    func shouldChangeConnectionAddress(_ value: String) {
+        guard let url = URL(string: value) else { return }
+        socket.disconnect()
+        socket = WebSocket(url: url)
+        socket.delegate = self
+        socket.connect()
     }
 }

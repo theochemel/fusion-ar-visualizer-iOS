@@ -9,6 +9,7 @@
 // <div>Icons made by <a href="https://www.freepik.com/" title="Freepik">Freepik</a> from <a href="https://www.flaticon.com/"                 title="Flaticon">www.flaticon.com</a> is licensed by <a href="http://creativecommons.org/licenses/by/3.0/"                 title="Creative Commons BY 3.0" target="_blank">CC 3.0 BY</a></div>
 //<div>Icons made by <a href="https://www.freepik.com/" title="Freepik">Freepik</a> from <a href="https://www.flaticon.com/"                 title="Flaticon">www.flaticon.com</a> is licensed by <a href="http://creativecommons.org/licenses/by/3.0/"                 title="Creative Commons BY 3.0" target="_blank">CC 3.0 BY</a></div>
 //<div>Icons made by <a href="https://www.flaticon.com/authors/good-ware" title="Good Ware">Good Ware</a> from <a href="https://www.flaticon.com/"                 title="Flaticon">www.flaticon.com</a> is licensed by <a href="http://creativecommons.org/licenses/by/3.0/"                 title="Creative Commons BY 3.0" target="_blank">CC 3.0 BY</a></div>
+//<div>Icons made by <a href="https://www.flaticon.com/authors/iconnice" title="Iconnice">Iconnice</a> from <a href="https://www.flaticon.com/"                 title="Flaticon">www.flaticon.com</a> is licensed by <a href="http://creativecommons.org/licenses/by/3.0/"                 title="Creative Commons BY 3.0" target="_blank">CC 3.0 BY</a></div>
 import Foundation
 import UIKit
 
@@ -20,6 +21,10 @@ class ControlViewController: UIViewController {
     var connectionStatusBackgroundBlurViewWidthConstraint: NSLayoutConstraint!
     var connectionStatusIndicator: UIView!
     var connectionStatusLabel: UILabel!
+    
+    var connectionAddressBackgroundBlurView: UIVisualEffectView!
+    var connectionAddressTextField: UITextField!
+    var connectionAddressConnectButton: UIButton!
     
     var scaleExpandableButton = ExpandableControlButton(icon: UIImage(named: "scale"), sliderMin: 10.0, sliderMax: 80.0)
     var rotateExpandableButton = ExpandableControlButton(icon: UIImage(named: "rotate"), sliderMin: 0.0, sliderMax: Float.pi * 2)
@@ -35,6 +40,10 @@ class ControlViewController: UIViewController {
             effectView.translatesAutoresizingMaskIntoConstraints = false
             effectView.layer.cornerRadius = 16.0
             effectView.layer.masksToBounds = true
+            
+            let tapGestureRecognizer = UITapGestureRecognizer(target: self, action: #selector(didTapConnectionIndicator(_:)))
+            effectView.addGestureRecognizer(tapGestureRecognizer)
+            
             return effectView
         }()
         view.addSubview(connectionStatusBackgroundBlurView)
@@ -83,6 +92,61 @@ class ControlViewController: UIViewController {
             connectionStatusLabel.centerYAnchor.constraint(equalTo: connectionStatusBackgroundBlurView.centerYAnchor),
         ])
         
+        connectionAddressBackgroundBlurView = {
+            let blurEffect = UIBlurEffect(style: .dark)
+            let effectView = UIVisualEffectView(effect: blurEffect)
+            effectView.translatesAutoresizingMaskIntoConstraints = false
+            effectView.layer.cornerRadius = 16.0
+            effectView.layer.masksToBounds = true
+            effectView.alpha = 0.0
+            return effectView
+        }()
+        view.addSubview(connectionAddressBackgroundBlurView)
+        
+        NSLayoutConstraint.activate([
+            connectionAddressBackgroundBlurView.heightAnchor.constraint(equalToConstant: 48.0),
+            connectionAddressBackgroundBlurView.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16.0),
+            connectionAddressBackgroundBlurView.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16.0),
+            connectionAddressBackgroundBlurView.topAnchor.constraint(equalTo: connectionStatusBackgroundBlurView.bottomAnchor, constant: 16.0),
+        ])
+        
+        connectionAddressConnectButton = {
+            let button = UIButton()
+            button.backgroundColor = .clear
+            button.setImage(UIImage(named: "connect"), for: .normal)
+            button.tintColor = .white
+            button.translatesAutoresizingMaskIntoConstraints = false
+            button.addTarget(self, action: #selector(didTapConnect(_:)), for: .touchUpInside)
+            return button
+        }()
+        connectionAddressBackgroundBlurView.contentView.addSubview(connectionAddressConnectButton)
+        
+        NSLayoutConstraint.activate([
+            connectionAddressConnectButton.widthAnchor.constraint(equalToConstant: 24.0),
+            connectionAddressConnectButton.heightAnchor.constraint(equalToConstant: 24.0),
+            connectionAddressConnectButton.trailingAnchor.constraint(equalTo: connectionAddressBackgroundBlurView.contentView.trailingAnchor, constant: -16.0),
+            connectionAddressConnectButton.centerYAnchor.constraint(equalTo: connectionAddressBackgroundBlurView.centerYAnchor),
+        ])
+        
+        connectionAddressTextField = {
+            let textField = UITextField()
+            textField.placeholder = "ws://localhost:8080/connect"
+            textField.translatesAutoresizingMaskIntoConstraints = false
+            textField.keyboardType = .URL
+            textField.autocorrectionType = .no
+            textField.autocapitalizationType = .none
+            textField.backgroundColor = .clear
+            return textField
+        }()
+        connectionAddressBackgroundBlurView.contentView.addSubview(connectionAddressTextField)
+        
+        NSLayoutConstraint.activate([
+            connectionAddressTextField.heightAnchor.constraint(equalToConstant: 30.0),
+            connectionAddressTextField.leadingAnchor.constraint(equalTo: connectionAddressBackgroundBlurView.leadingAnchor, constant: 16.0),
+            connectionAddressTextField.trailingAnchor.constraint(equalTo: connectionAddressConnectButton.leadingAnchor, constant: -16.0),
+            connectionAddressTextField.centerYAnchor.constraint(equalTo: connectionAddressBackgroundBlurView.centerYAnchor),
+        ])
+        
         view.addSubview(scaleExpandableButton)
         scaleExpandableButton.slider.addTarget(self, action: #selector(didChangeScaleSlider(_:)), for: .valueChanged)
         
@@ -104,6 +168,23 @@ class ControlViewController: UIViewController {
         ])
     }
     
+    @objc func didTapConnectionIndicator(_ sender: UIView) {
+        UIView.animate(withDuration: 0.2) {
+            self.connectionAddressBackgroundBlurView.alpha = (self.connectionAddressBackgroundBlurView.alpha == 0.0 ? 1.0 : 0.0)
+        }
+        view.endEditing(true)
+    }
+    
+    @objc func didTapConnect(_ sender: UIButton) {
+        guard let connectionAddress = connectionAddressTextField.text else { return }
+        delegate?.shouldChangeConnectionAddress(connectionAddress)
+        
+        UIView.animate(withDuration: 0.2) {
+            self.connectionAddressBackgroundBlurView.alpha = (self.connectionAddressBackgroundBlurView.alpha == 0.0 ? 1.0 : 0.0)
+        }
+        view.endEditing(true)
+    }
+    
     @objc func didChangeScaleSlider(_ sender: UISlider) {
         delegate?.shouldChangeModelScale(sender.value)
     }
@@ -123,4 +204,5 @@ class ControlViewController: UIViewController {
 protocol ARControlsDelegate: class {
     func shouldChangeModelScale(_ value: Float)
     func shouldChangeModelRotation(_ value: Float)
+    func shouldChangeConnectionAddress(_ value: String)
 }

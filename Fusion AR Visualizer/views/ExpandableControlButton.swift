@@ -23,11 +23,17 @@ class ExpandableControlButton: UIView {
         layer.masksToBounds = true
         
         let backgroundView: UIView = {
-            let view = UIView()
-            view.backgroundColor = .controlButton
-            view.layer.cornerRadius = 28.0
-            view.translatesAutoresizingMaskIntoConstraints = false
-            return view
+//            let view = UIView()
+//            view.backgroundColor = .controlButton
+//            view.layer.cornerRadius = 28.0
+//            view.translatesAutoresizingMaskIntoConstraints = false
+//            return view
+            let blurVisualEffect = UIBlurEffect(style: .dark)
+            let visualEffectView = UIVisualEffectView(effect: blurVisualEffect)
+            visualEffectView.layer.cornerRadius = 28.0
+            visualEffectView.layer.masksToBounds = true
+            visualEffectView.translatesAutoresizingMaskIntoConstraints = false
+            return visualEffectView
         }()
         addSubview(backgroundView)
         

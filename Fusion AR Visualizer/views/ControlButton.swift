@@ -14,7 +14,7 @@ class ControlButton: UIButton {
     init(icon: UIImage?) {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
-        backgroundColor = .controlButton
+        backgroundColor = .clear
         
         layer.cornerRadius = 28.0
         layer.masksToBounds = true
