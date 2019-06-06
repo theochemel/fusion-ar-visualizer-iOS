@@ -51,6 +51,7 @@ class ARViewController: UIViewController, ARSCNViewDelegate, ARSessionDelegate, 
         
         // Set the view's delegate
         sceneView.delegate = self
+        sceneView.allowsCameraControl = true
         
         // Show statistics such as fps and timing information
         sceneView.showsStatistics = false
@@ -128,26 +129,6 @@ class ARViewController: UIViewController, ARSCNViewDelegate, ARSessionDelegate, 
         placeLocationIndicator?.removeFromParentNode()
         placeLocationIndicator = nil
     }
-    
-    
-    
-//    @objc func didTap(_ recognizer: UITapGestureRecognizer) {
-//
-//        if let hitTestResult = sceneView.hitTest(CGPoint(x: view.bounds.midX, y: view.bounds.midY), types: [.estimatedHorizontalPlane, .existingPlaneUsingExtent]).first,
-//            let planeAnchor = hitTestResult.anchor as? ARPlaneAnchor {
-//
-//            guard let modelData = latestSTLData else { return }
-//            currentModelPosition = hitTestResult.worldTransform
-//            setModel(modelData: modelData, position: hitTestResult.worldTransform, material: currentModelMaterial, scale: currentModelScale, rotation: currentModelRotation)
-//        } else {
-//            guard let modelData = latestSTLData else { return }
-//            guard let camera = sceneView.pointOfView else { return }
-//            var translation = matrix_identity_float4x4
-//            translation.columns.3.z = -0.5
-//            currentModelPosition = matrix_multiply(camera.simdTransform, translation)
-//            setModel(modelData: modelData, position: currentModelPosition!, material: currentModelMaterial, scale: currentModelScale, rotation: currentModelRotation)
-//        }
-//    }
     
     func websocketDidConnect(socket: WebSocketClient) {
         print("websocket is connected")
